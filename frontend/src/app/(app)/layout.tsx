@@ -1,9 +1,46 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { GroupProvider, useGroups } from "@/lib/groups-context";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/obligations", label: "Obligaciones" },
+  { href: "/payments", label: "Pagos" },
+] as const;
+
+function AppSidebar() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="w-48 bg-white border-r border-gray-200 min-h-0 shrink-0">
+      <ul className="py-4">
+        {NAV_ITEMS.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                className={
+                  "block px-4 py-2 text-sm " +
+                  (isActive
+                    ? "bg-blue-50 text-blue-700 font-medium border-r-2 border-blue-600"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-800")
+                }
+              >
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
 function AppHeader() {
   const { logout } = useAuth();
@@ -76,10 +113,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <GroupProvider>
         <AppHeader />
-        <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+        <div className="flex flex-1">
+          <AppSidebar />
+          <main className="flex-1 max-w-4xl mx-auto px-4 py-8">{children}</main>
+        </div>
       </GroupProvider>
     </div>
   );

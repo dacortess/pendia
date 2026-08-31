@@ -35,15 +35,23 @@ interface GroupsContextValue extends GroupsState {
 
 const GroupsContext = createContext<GroupsContextValue | null>(null);
 
-export function GroupProvider({ children }: { children: React.ReactNode }) {
+export function GroupProvider({
+  children,
+  initialState,
+}: {
+  children: React.ReactNode;
+  initialState?: Partial<GroupsState>;
+}) {
   const [state, setState] = useState<GroupsState>({
-    groups: [],
-    currentGroupId: null,
-    loading: true,
-    error: null,
+    groups: initialState?.groups ?? [],
+    currentGroupId: initialState?.currentGroupId ?? null,
+    loading: initialState?.loading ?? true,
+    error: initialState?.error ?? null,
   });
 
   useEffect(() => {
+    if (initialState) return;
+
     let cancelled = false;
 
     async function loadGroups() {
@@ -84,6 +92,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setCurrentGroupId = useCallback((id: number) => {

@@ -2122,3 +2122,506 @@ frontend/src/app/(app)/dashboard/page.tsx     (MODIFICADO — +maxLength={200})
 frontend/src/lib/groups-context.tsx            (MODIFICADO — eliminado switch NAME_TOO_LONG/EMPTY_NAME)
 frontend/tests/dashboard-page.test.tsx         (MODIFICADO — test 3 reescrito + nuevo test maxLength)
 ```
+
+---
+
+## 2026-08-31 — Capa Frontend 4: Sidebar + Obligaciones (listado + creación)
+
+### Qué se implementó
+
+#### 1. Sidebar de navegación (`frontend/src/app/(app)/layout.tsx`)
+
+- **`AppSidebar`**: Componente con links a Dashboard (`/dashboard`) y Obligaciones (`/obligations`).
+- Link activo marcado con `bg-blue-50 text-blue-700 font-medium border-r-2 border-blue-600`, detectado vía `usePathname()` de `next/navigation`.
+- Layout flex: sidebar fijo `w-48` a la izquierda + contenido principal `flex-1` a la derecha.
+- `AppHeader` se mantiene arriba (sobre todo el layout), sidebar va debajo.
+
+#### 2. Funciones de obligaciones (`frontend/src/lib/api-client.ts`)
+
+- **`Obligation`** interface: tipado completo de la respuesta del backend (19 campos).
+- **`ObligationCreateInput`** interface: campos para creación (13 campos, sin `category_id`/`payment_method_id`/`responsible_user_id`/`external_reference` — omitidos intencionalmente, van en prompt futuro).
+- **`listObligations(groupId)`**: GET `/groups/{id}/obligations`.
+- **`createObligation(groupId, data)`**: POST `/groups/{id}/obligations`.
+
+#### 3. Página de obligaciones (`frontend/src/app/(app)/obligations/page.tsx`)
+
+- **Carga de datos**: Llama `listObligations(currentGroupId)` al montar.
+- **Estado vacío**: "Aún no tienes obligaciones registradas."
+- **Sin grupo**: Mensaje con link a Dashboard para crear uno primero.
+- **Error de carga**: Mensaje inline rojo.
+- **Tabla** (1+ obligaciones): Nombre, Proveedor ("—"), Monto formateado (toLocaleString "es-CO"), Periodicidad traducida, Vencimiento, Esencial (badge).
+- **Creación**: Botón "+ Nueva obligación" (solo visible si `my_role` es "owner" o "admin"). Form con validación client-side: nombre requerido (maxLength 200), día 1-31, mes requerido solo para Anual, fecha inicio requerida, fecha fin >= fecha inicio.
+- **Manejo de errores de creación**: `FORBIDDEN_NOT_ADMIN` → "No tienes permisos para crear obligaciones." Otros errores → fallback genérico.
+
+#### 4. `GroupProvider` con `initialState` (`frontend/src/lib/groups-context.tsx`)
+
+- Nuevo prop `initialState?: Partial<GroupsState>` para testing. Cuando se provee, el useEffect de carga de grupos se salta. Solo para testing, no para uso en producción.
+
+### Decisiones de diseño
+
+1. **Omisión intencional de campos en el form**: `category_id`, `payment_method_id`, `responsible_user_id` y `external_reference` no se incluyen en este prompt porque requieren listados de categorías, medios de pago y miembros del grupo que no existen en el frontend todavía. Se agregan en un prompt futuro. No se inventan selects "por si acaso".
+
+2. **Monto como estado separado**: El campo "Monto esperado" se maneja como `useState<string>` independiente (`monto`), no como parte de `ObligationCreateInput`. Se convierte a `expected_amount_cents` con `Math.round(parseFloat(monto) * 100)` al enviar. Esto permite input de display (ej. "15.900") sin la fricción de parsear cents.
+
+3. **Error handling fiel al backend**: Solo se mapea `FORBIDDEN_NOT_ADMIN` (único código de negocio real para este flujo). No se mapean `CATEGORY_NOT_IN_GROUP`, `PAYMENT_METHOD_NOT_IN_GROUP` ni `RESPONSIBLE_NOT_GROUP_MEMBER` — no pueden ocurrir porque el form nunca envía esos campos. Cualquier otro error (incluyendo 422 de Pydantic sin `code`) cae al fallback genérico.
+
+4. **`initialState` en `GroupProvider`**: Agregado un prop opcional para testing que permite inicializar el estado sin hacer la llamada a `GET /groups`. El `useEffect` de carga se salta cuando `initialState` está presente. Esto evita tener que mockear `GET /groups` en cada test de la página de obligaciones.
+
+### Tests — 13 nuevos en `obligations-page.test.tsx` + 2 nuevos en `app-layout.test.tsx`
+
+#### `tests/obligations-page.test.tsx` (13 tests)
+
+| # | Test | Verifica |
+|---|------|----------|
+| 1 | shows empty state when no obligations exist | Mensaje "Aún no tienes obligaciones registradas." |
+| 2 | renders table with obligation data | Nombre, proveedor, monto, periodicidad, vencimiento, badge |
+| 3 | hides create button when role is member | Botón NO está en el DOM |
+| 4 | shows create button when role is owner | Botón visible |
+| 5 | shows create button when role is admin | Botón visible |
+| 6 | creates obligation and updates table | POST disparado, tabla actualiza, form resetea |
+| 7 | shows annual month field only when periodicity is annual | Campo aparece/desaparece con el select |
+| 8 | validates annual due_month required | Error inline al enviar sin mes |
+| 9 | hides month field when periodicity is not annual | Campo no está en DOM |
+| 10 | shows FORBIDDEN_NOT_ADMIN error message | Mensaje específico de 403 |
+| 11 | shows generic error for unexpected 500 | Mensaje genérico |
+| 12 | shows message to create group when no currentGroup | Mensaje + link a /dashboard |
+| 13 | shows load error when listObligations fails | Mensaje de error de carga |
+
+#### `tests/app-layout.test.tsx` (2 tests nuevos)
+
+| # | Test | Verifica |
+|---|------|----------|
+| 1 | has sidebar with Dashboard and Obligaciones links | Links con href correctos, Dashboard activo por defecto |
+| 2 | highlights Obligaciones link when on /obligations | Link activo tiene `bg-blue-50`, inactivo no |
+
+### Verificación
+
+```
+$ cd frontend && npm run build
+✓ Compiled successfully
+✓ Generating static pages (8/8)
+Route (app)                              Size     First Load JS
+┌ ○ /                                    2.71 kB        90 kB
+├ ○ /dashboard                           3.37 kB     90.7 kB
+├ ○ /obligations                         4.64 kB      101 kB
+├ ○ /login                               2.46 kB     99.2 kB
+└ ○ /register                            2.99 kB     99.7 kB
+
+$ cd frontend && npm run lint
+✔ No ESLint warnings or errors
+
+$ cd frontend && npm test
+✓ tests/obligations-page.test.tsx (13 tests) 818ms
+Test Files  9 passed (9)
+Tests  62 passed (62)
+```
+
+### Archivos creados o modificados
+
+```
+frontend/src/app/(app)/
+├── layout.tsx                    (MODIFICADO — +AppSidebar, +usePathname, +Link, layout flex)
+└── obligations/
+    └── page.tsx                  (NUEVO — listado + creación de obligaciones)
+
+frontend/src/lib/
+├── api-client.ts                 (MODIFICADO — +Obligation, +ObligationCreateInput, +listObligations, +createObligation)
+└── groups-context.tsx            (MODIFICADO — +initialState prop en GroupProvider)
+
+frontend/tests/
+├── handlers.ts                   (MODIFICADO — +GET/POST /groups/:id/obligations)
+├── obligations-page.test.tsx     (NUEVO — 13 tests)
+└── app-layout.test.tsx           (MODIFICADO — +2 tests de sidebar)
+```
+
+### Preguntas abiertas para el siguiente prompt
+
+1. **Selects de categoría/medio de pago/responsable**: Una vez que existan los listados de categorías, medios de pago y miembros del grupo en el frontend, se agregan como campos en el form de creación de obligaciones (`category_id`, `payment_method_id`, `responsible_user_id`).
+
+2. **Paginación/filtros en listado de obligaciones**: Actualmente carga todas las obligaciones de golpe. Para grupos con muchas obligaciones, se necesitará paginación o filtros por periodicidad/estado.
+
+3. **Pagos (Capa 5 del README original)**: Registrar pagos contra obligaciones, historial de pagos, estados de pago.
+
+---
+
+## Capa Frontend 5 — Detalle, edición y eliminación de obligaciones
+
+### Qué se construyó
+
+1. **`api-client.ts` — 3 funciones nuevas + 1 interfaz**:
+   - `getObligation(groupId, id)` → `GET /groups/{groupId}/obligations/{id}`
+   - `updateObligation(groupId, id, data)` → `PATCH /groups/{groupId}/obligations/{id}`
+   - `deactivateObligation(groupId, id)` → `DELETE /groups/{groupId}/obligations/{id}` (soft-delete, 204)
+   - `ObligationUpdateInput` — todos los campos editables opcionales. `provider_name`, `notes`, `due_month`, `end_date` aceptan `null` para borrar valores.
+
+2. **`lib/obligation-format.ts` — utilidades compartidas** (extraídas de `obligations/page.tsx`):
+   - `PERIODICITY_LABELS` — traducción al español de periodicidades
+   - `formatAmount(cents, currency)` — formato moneda con `toLocaleString("es-CO")`
+   - `formatDueDate(obligation)` — texto legible de vencimiento
+
+3. **`components/ObligationForm.tsx` — componente de formulario compartido**:
+   - Props: `mode: "create"|"edit"`, `initialValues?`, `onSubmit`, `onCancel?`, `submitLabel`, `error?`, `submitting?`
+   - Internamente maneja `monto` como string para el input, convierte a `expected_amount_cents` al enviar
+   - Validación client-side: nombre requerido (≤200), día 1-31, mes requerido solo para Anual, fecha inicio requerida solo en create, fecha fin ≥ fecha inicio
+   - En modo edit: envía `end_date: null` explícitamente (no lo omite), `provider_name: null` y `notes: null` para campos vacíos
+   - Reemplaza el form inline de ~150 líneas que existía en `obligations/page.tsx`
+
+4. **`obligations/[id]/page.tsx` — página de detalle** (nueva):
+   - `useParams()` para obtener el id, `useRouter()` para redirects
+   - Vista de detalle: todos los campos formateados, 4 flags como badges Sí/No con colores distintos
+   - Estados de carga: "Cargando..." mientras carga. 404 → "Obligación no encontrada." + link a /obligations. Otro error → "No se pudo cargar la obligación."
+   - **Edición** (solo admin/owner): botón "Editar" muestra `ObligationForm` pre-llenado. Errores: FORBIDDEN_NOT_ADMIN → mensaje específico, OBLIGATION_NOT_FOUND → redirige a /obligations, otro → fallback genérico
+   - **Eliminación** (solo admin/owner): botón "Eliminar" muestra confirmación inline (sin `window.confirm`). "Confirmar" llama `deactivateObligation` y redirige. "Cancelar" oculta la confirmación. Errores: FORBIDDEN_NOT_ADMIN → mensaje específico sin redirigir, OBLIGATION_NOT_FOUND → redirige igual (ya eliminada), otro → fallback sin redirigir
+   - Para member: ni "Editar" ni "Eliminar" existen en el DOM (no solo ocultos)
+
+5. **`obligations/page.tsx` — modificaciones**:
+   - Reemplaza form inline por `<ObligationForm mode="create" ...>`
+   - Nombre de cada obligación en la tabla es un `<Link href={/obligations/${o.id}}>` (estilo azul)
+   - Elimina código duplicado de formatting (usa `obligation-format.ts`)
+
+### Decisiones de diseño
+
+1. **`ObligationForm` compartido**: Se extrajo el form de ~150 líneas de JSX casi idénticas entre creación y edición. Esto no contradice la decisión de "sin componentes UI genéricos" (esa fue sobre Button/Card/Input de diseño visual; esto es lógica de negocio/formulario repetida, que sí conviene extraer).
+
+2. **No replicar el sentinel `"unset"` del backend**: El schema `ObligationUpdate` del backend tiene un mecanismo interno de sentinel `"unset"` para `end_date`, pero no está cubierto por ningún test del backend. Se usó `null` normal (que sí está testeado) como camino probado para borrar la fecha de fin.
+
+3. **`provider_name` y `notes` como `string | null` en `ObligationUpdateInput`**: A diferencia de la versión de create donde se usaba `undefined` (omitiendo el campo), en update se envía `null` explícitamente para limpiar campos. Esto permite al backend distinguir entre "no se envió el campo" (no cambia) y "se envió null" (borra el valor).
+
+4. **Confirmación de eliminación inline**: Se evitó `window.confirm` por ser menos testeable. Se usa un estado local `confirmingDelete` con botones "Confirmar"/"Cancelar" renderizados condicionalmente.
+
+### Tests — 14 nuevos
+
+#### `tests/obligation-detail-page.test.tsx` (13 tests nuevos)
+
+| # | Test | Verifica |
+|---|------|----------|
+| 1 | shows obligation data when loaded successfully | Todos los campos, badges, monto formateado |
+| 2 | shows 'Obligación no encontrada.' on 404 | Mensaje + link de vuelta |
+| 3 | does not show edit/delete buttons when role is member | Botones NO están en el DOM |
+| 4 | shows edit/delete buttons when role is owner | Botones visibles |
+| 5 | shows edit/delete buttons when role is admin | Botones visibles |
+| 6 | edit: shows form pre-filled and saves changes | Valores iniciales, PATCH disparado, vista actualiza |
+| 7 | edit: validates annual due_month required | Error inline al cambiar a ANNUAL sin mes |
+| 8 | edit: shows FORBIDDEN_NOT_ADMIN error | Mensaje específico de 403 |
+| 9 | delete: shows confirmation, cancel hides it | Confirmación aparece/desaparece, sin DELETE |
+| 10 | delete: confirm calls DELETE and redirects | DELETE disparado, router.push a /obligations |
+| 11 | delete: FORBIDDEN_NOT_ADMIN shows error without redirecting | Mensaje específico, sin redirect |
+| 12 | shows generic error when load fails | Mensaje de error de carga |
+| 13 | renders obligation name as link to detail page (en obligations-page.test.tsx) | Link con href correcto |
+
+### Verificación pendiente
+
+Node.js no está disponible en este entorno. Ejecutá localmente:
+
+```bash
+cd frontend && npm run build
+cd frontend && npm run lint
+cd frontend && npm test
+```
+
+### Archivos creados o modificados
+
+```
+frontend/src/lib/
+├── api-client.ts                 (MODIFICADO — +getObligation, +updateObligation, +deactivateObligation, +ObligationUpdateInput)
+└── obligation-format.ts          (NUEVO — PERIODICITY_LABELS, formatAmount, formatDueDate)
+
+frontend/src/components/
+└── ObligationForm.tsx            (NUEVO — form compartido create/edit)
+
+frontend/src/app/(app)/obligations/
+├── page.tsx                      (MODIFICADO — usa ObligationForm, links en nombres)
+└── [id]/
+    └── page.tsx                  (NUEVO — detalle, edición, eliminación)
+
+frontend/tests/
+├── handlers.ts                   (MODIFICADO — +GET/:id 404, +PATCH, +DELETE 204)
+├── obligation-detail-page.test.tsx (NUEVO — 13 tests)
+└── obligations-page.test.tsx     (MODIFICADO — +1 test de links)
+```
+
+### Preguntas abiertas para el siguiente prompt
+
+1. **Selects de categoría/medio de pago/responsable**: Una vez que existan los listados de categorías, medios de pago y miembros del grupo en el frontend, se agregan como campos en el form de creación/edición de obligaciones (`category_id`, `payment_method_id`, `responsible_user_id`).
+
+2. **Pagos (Capa 5 del README original)**: Registrar pagos contra obligaciones, historial de pagos, estados de pago.
+
+3. **Paginación/filtros en listado de obligaciones**: Actualmente carga todas las obligaciones de golpe. Para grupos con muchas obligaciones, se necesitará paginación o filtros por periodicidad/estado.
+
+---
+
+## Corrección — Bug de tipos en ObligationForm onSubmit
+
+### Problema
+
+`ObligationFormProps.onSubmit` está tipado como `(data: ObligationCreateInput | ObligationUpdateInput) => Promise<void>`. Los call sites pasaban handlers con firmas más estrechas:
+
+- `obligations/page.tsx`: `handleCreate(data: ObligationCreateInput)` — no acepta `ObligationUpdateInput`
+- `obligations/[id]/page.tsx`: `handleUpdate(data: ObligationUpdateInput)` — no acepta `ObligationCreateInput`
+
+Con `strict: true`, TypeScript aplica contravarianza en parámetros de función: la unión completa no es asignable a ninguna de las dos firmas estrechas individualmente. Esto produce error de tipos en ambos call sites.
+
+### Fix
+
+Ampliá la firma de ambos handlers para aceptar la unión completa y hacer cast explícito interno (sabemos por construcción que el tipo real siempre es el correcto por el `mode` fijo pasado a `ObligationForm`):
+
+- `handleCreate(data: ObligationCreateInput | ObligationUpdateInput)` + `const input = data as ObligationCreateInput`
+- `handleUpdate(data: ObligationCreateInput | ObligationUpdateInput)` + `const input = data as ObligationUpdateInput`
+
+### Verificación pendiente
+
+Node.js no está disponible en este entorno. Ejecutá localmente:
+
+```bash
+cd frontend && npm run build && npm run lint && npm run test
+```
+
+---
+
+## Corrección — Ruta `[id]` incompatible con `output: 'export'`
+
+### Problema
+
+`obligations/[id]/page.tsx` usaba un segmento dinámico `[id]` en la ruta. Con `output: 'export'` (export estático puro, ADR-006), Next.js requiere `generateStaticParams()` para enumerar todos los valores posibles del segmento en build time. Los IDs de obligaciones se crean en runtime, así que es imposible enumerarlos — el build falla con:
+
+```
+Error: Page "/obligations/[id]" is missing "generateStaticParams()" so it cannot be used with "output: export" config.
+```
+
+### Fix
+
+1. **Ruta renombrada**: `obligations/[id]/page.tsx` → `obligations/detail/page.tsx`
+2. **Query param en vez de segmento dinámico**: el componente ahora lee el id de `useSearchParams().get("id")` en vez de `useParams().id`
+3. **Links actualizados**: `/obligations/${o.id}` → `/obligations/detail?id=${o.id}`
+4. **Tests ajustados**: import, mock de `useSearchParams` en vez de `useParams`, href esperado
+
+`docs/adr/ADR-006-estructura-frontend.md` ya documenta este patrón (ruta estática + query param) como el correcto para cualquier página de detalle futura.
+
+### Fix menor — ESLint warning en `groups-context.tsx`
+
+El comentario `// eslint-disable-next-line react-hooks/exhaustive-deps` estaba antes del `useEffect` (línea 53) pero ESLint reporta el warning en la línea del array de dependencias (`}, []);`, línea 96). Se movió el comentario a inmediatamente antes de `}, []);`.
+
+### Verificación
+
+```
+$ cd frontend && npm run build
+✓ Compiled successfully
+✓ Generating static pages (9/9)
+Route (app)                              Size     First Load JS
+├ ○ /obligations                         1.6 kB          102 kB
+├ ○ /obligations/detail                  2.23 kB         103 kB
+
+$ cd frontend && npm run lint
+✔ No ESLint warnings or errors
+
+$ cd frontend && npm test
+ Test Files  10 passed (10)
+      Tests  75 passed (75)
+```
+
+---
+
+## 2026-08-31 — Capa Frontend 6: Pagos (registrar pago contra período)
+
+### Qué se construyó
+
+1. **`layout.tsx` — Sidebar con link "Pagos"**:
+   - Agregado `{ href: "/payments", label: "Pagos" }` a `NAV_ITEMS`.
+
+2. **`api-client.ts` — 3 tipos + 2 funciones nuevas**:
+   - `ObligationPeriod` interface: `id`, `obligation_id`, `period_month`, `due_date`, `status ("PENDIENTE"|"PAGADO"|"VENCIDO")`, `created_at`.
+   - `PaymentCreateInput` interface: `amount_cents`, `currency ("COP"|"USD")`, `paid_at`, `notes?`, `receipt_url?`.
+   - `Payment` interface: modelo completo del pago.
+   - `listPeriods(groupId)` → `GET /groups/{groupId}/periods`
+   - `registerPayment(groupId, periodId, data)` → `POST /groups/{groupId}/periods/{periodId}/payments`
+
+3. **`payments/page.tsx` — Página de pagos pendientes** (nueva):
+   - **Carga**: `Promise.all([listObligations, listPeriods])` al montar. Cruza períodos con obligaciones via `Map<number, Obligation>` por `obligation_id`.
+   - **Filtrado**: excluye períodos con status `PAGADO` y períodos cuya `obligation_id` no tiene match en el mapa de obligaciones. Ordena por `due_date` ascendente.
+   - **Formato de fecha**: parseo directo del string `YYYY-MM-DD` (no `new Date()`) para evitar desfase de timezone en Colombia (UTC-5).
+   - **Estados**: "Cargando..." / "Primero creá un grupo..." / "No se pudieron cargar los pagos pendientes." / "No hay pagos pendientes."
+   - **Tabla**: nombre de obligación, monto formateado (`formatAmount`), fecha de vencimiento formateada, badge de estado (Pendiente = amarillo, Vencido = rojo).
+   - **Botón "Registrar pago"**: visible solo si `canPay(obligation)` — owner/admin del grupo, o `responsible_user_id` de la obligación coincide con `user.id`. No está en el DOM cuando canPay es false.
+   - **Form inline**: se expande debajo de la tabla al hacer click. Campos: monto (pre-cargado con `expected_amount_cents/100`), moneda (texto fijo, NO editable), fecha de pago (default hoy), notas (opcional), URL de comprobante (opcional).
+   - **Moneda nunca es editable**: el form SIEMPRE envía `currency: obligation.currency`, lo que hace imposible el error `CURRENCY_MISMATCH` desde el frontend.
+   - **Manejo de errores**:
+     - `PERIOD_ALREADY_PAID` → mensaje + el período desaparece de la lista (alguien más lo pagó).
+     - `FORBIDDEN_NOT_RESPONSIBLE` → "No tienes permisos para registrar este pago."
+     - Otros → "No se pudo registrar el pago. Intenta de nuevo."
+
+4. **`tests/handlers.ts` — 2 handlers nuevos**:
+   - `GET /groups/:groupId/periods` → retorna `[]` por defecto.
+   - `POST /groups/:groupId/periods/:periodId/payments` → crea el pago con id: 1, registered_by_user_id: 1.
+
+5. **`tests/payments-page.test.tsx` — 16 tests**:
+   - Empty state: "No hay pagos pendientes."
+   - Renderiza fila con nombre, monto, fecha, badge.
+   - Período PAGADO no aparece en la lista.
+   - Botón visible con role owner.
+   - Botón visible con member + responsible_user_id === user.id.
+   - Botón NO visible con member + responsible_user_id null.
+   - Botón NO visible con member + responsible_user_id !== user.id.
+   - Pago exitoso: período desaparece de la lista.
+   - Error PERIOD_ALREADY_PAID: mensaje correcto + período desaparece.
+   - Error FORBIDDEN_NOT_RESPONSIBLE: mensaje específico.
+   - Currency siempre coincide con la de la obligación (verifica `body.currency`).
+    - No-group prompt.
+    - Load error.
+    - Excludes periods whose obligation no longer exists (post-review).
+    - Prefills 'Monto pagado' with the obligation's expected amount (post-review).
+    - Cancel closes the form without calling the payments endpoint (post-review).
+
+6. **`tests/app-layout.test.tsx` — 1 test nuevo**:
+   - Verifica que el link "Pagos" existe con `href="/payments"`.
+
+### Decisiones de diseño
+
+1. **Moneda no editable en el form**: La moneda se toma directamente de la obligación (`obligation.currency`) y nunca se envía como input del usuario. Esto previene el error `CURRENCY_MISMATCH` del backend de forma completa. No hay un select de moneda en el form — el usuario simplemente ve "Moneda: COP" (o USD) como texto.
+
+2. **Casi ninguna obligación será pagable por un member hoy**: Dado que `responsible_user_id` es `null` en casi todas las obligaciones existentes (el select de responsable no existe todavía — ver Capa 5 deferred), la función `canPay` solo retorna `true` para owner/admin. Esto es correcto y no es un bug — cuando exista el select de responsable en el form de obligaciones, los members podrán pagar sus obligaciones asignadas.
+
+3. **Fecha de vencimiento sin `new Date()`**: El string `due_date` viene como `YYYY-MM-DD`. Usar `new Date(due_date)` interpreta la fecha como UTC medianoche, lo que en timezone Colombia (UTC-5) puede mostrar un día menos. Se parsea directamente con `split("-")`.
+
+4. **Períodos de obligaciones desactivadas excluidos**: Si un período tiene `obligation_id` que no existe en el mapa de obligaciones, se excluye de la lista. Esto cubre el caso edge de obligaciones borradas/desactivadas.
+
+5. **Error de pago se muestra a nivel de página**: El `payError` se muestra arriba de la tabla (no dentro del form inline) para que sea visible incluso cuando el form se cierra después de un `PERIOD_ALREADY_PAID`.
+
+### Tests — 17 nuevos, 92 total, todos pasando
+
+```
+$ cd frontend && npm test
+✓ tests/payments-page.test.tsx (16 tests) 707ms
+✓ tests/app-layout.test.tsx (6 tests) 336ms
+Test Files  11 passed (11)
+      Tests  92 passed (92)
+```
+
+### Build y lint
+
+```
+$ cd frontend && npm run build
+✓ Compiled successfully
+✓ Generating static pages (10/10)
+Route (app)                              Size     First Load JS
+├ ○ /payments                            4.54 kB         101 kB
+○ (Static) prerendered as static content
+
+$ cd frontend && npm run lint
+✔ No ESLint warnings or errors
+```
+
+### Archivos creados o modificados
+
+```
+frontend/src/app/(app)/
+├── layout.tsx                    (MODIFICADO — +Pagos en NAV_ITEMS)
+└── payments/
+    └── page.tsx                  (NUEVO — página de pagos pendientes + form inline)
+
+frontend/src/lib/
+└── api-client.ts                 (MODIFICADO — +ObligationPeriod, +PaymentCreateInput, +Payment, +listPeriods, +registerPayment)
+
+frontend/tests/
+├── handlers.ts                   (MODIFICADO — +GET /periods, +POST /periods/:id/payments)
+├── payments-page.test.tsx        (NUEVO — 13 tests)
+└── app-layout.test.tsx           (MODIFICADO — +1 test de link Pagos)
+```
+
+### Preguntas abiertas — próximos prompts
+
+1. **Historial de pagos + anular pago**: `GET /groups/{group_id}/payments` (historial) y `POST /groups/{group_id}/payments/{id}/void` (anular) — quedan para el siguiente prompt.
+
+2. **Select de responsable en obligaciones**: Bloqueado hasta que exista `GET /groups/{group_id}/members` en el backend (no es un problema de frontend). Una vez que exista, se agrega `responsible_user_id` al form de creación/edición de obligaciones, y los members podrán pagar sus obligaciones asignadas.
+
+---
+
+## 2026-08-31 — Capa Frontend 7: Historial de pagos + anular pago
+
+### Qué se construyó
+
+1. **`api-client.ts` — 2 funciones nuevas**:
+   - `listPayments(groupId)` → `GET /groups/{groupId}/payments` — retorna `Payment[]` (incluye anulados).
+   - `voidPayment(groupId, paymentId)` → `POST /groups/{groupId}/payments/{paymentId}/void` — retorna `Payment` actualizado.
+
+2. **`payments/page.tsx` — refactor de estado + sección "Historial de pagos"**:
+   - **Refactor `periods` → `allPeriods`**: el state ahora almacena la lista SIN filtrar (tal cual viene de `listPeriods`). Esto es necesario porque el historial necesita cruzar CUALQUIER pago con su período, incluidos los PAGADO.
+   - **`pendingPeriods` derivado en render**: la lista filtrada (sin PAGADO, sin huérfanos) se calcula como variable derivada en cada render, no como state. Es O(n) y n es chico.
+   - **`periodsById` map**: `Map(allPeriods.map(p => [p.id, p]))` — se calcula en render para resolver `obligation_period_id` → período → `obligation_id` → obligación.
+   - **`payments` state + `listPayments` en `Promise.all`**: se suma al load inicial junto a `listObligations` y `listPeriods`.
+   - **Sección "Historial de pagos"**: debajo de "Pagos pendientes". Muestra tabla con columnas: Obligación, Monto pagado, Fecha de pago, Estado, Acción.
+     - **Vacío**: "Aún no hay pagos registrados." cuando `payments.length === 0`.
+     - **Orden**: por `paid_at` descendente (comparación lexicográfica de strings `YYYY-MM-DD`).
+     - **Resolución de nombre**: `periodsById.get(payment.obligation_period_id)` → `obligationsMap.get(period.obligation_id)`. Si no hay match, muestra "Obligación eliminada" (no oculta la fila — es un registro histórico).
+     - **Badges**: "Activo" (verde) si `voided_at === null`, "Anulado" (gris) si no.
+   - **Botón "Anular"**: solo visible si `!payment.voided_at && canVoid(payment)`. La función `canVoid` replica la lógica de `canPay`: owner/admin, o `responsible_user_id` coincide con `user.id`. Si no hay match de período/obligación, `canVoid` retorna `false`.
+   - **Flujo de anular**: `voidingPaymentId: number | null` — click "Anular" → confirmación inline "¿Anular este pago? El período volverá a quedar pendiente." con "Confirmar"/"Cancelar". "Cancelar" cierra sin llamar al endpoint. "Confirmar" llama `voidPayment`:
+     - Éxito: reemplaza el payment en state con la respuesta del backend (ya trae `voided_at`/`voided_by_user_id` seteados).
+     - `PAYMENT_ALREADY_VOIDED` (409): actualiza localmente el payment como anulado + muestra "Este pago ya fue anulado."
+     - `FORBIDDEN_NOT_RESPONSIBLE` (403): "No tienes permisos para anular este pago."
+     - Otro error: "No se pudo anular el pago. Intenta de nuevo."
+   - **Simplificación deliberada**: anular un pago desde el historial NO resincroniza automáticamente la sección "Pagos pendientes". El usuario debe recargar la página para ver el período como pendiente de nuevo. Esto se documenta como decisión de diseño, no es un bug.
+
+3. **`tests/handlers.ts` — handler nuevo**:
+   - `GET /groups/:groupId/payments` → retorna `[]` por defecto.
+
+4. **`tests/payments-page.test.tsx` — 11 tests nuevos** (16 → 27):
+   - "Aún no hay pagos registrados." cuando payments vacío.
+   - Renderiza fila de historial con obligación, monto, fecha, badge "Activo".
+   - Payment voided muestra badge "Anulado" y NO botón "Anular".
+   - Payment sin período matchea muestra "Obligación eliminada" y no revienta.
+   - Botón "Anular" visible para owner.
+   - Botón "Anular" visible para member con `responsible_user_id` match.
+   - Botón "Anulado" oculto para member sin ser responsable.
+   - Click "Anular" → "Cancelar" oculta confirmación sin llamar void.
+   - Click "Anular" → "Confirmar" llama void, fila pasa a "Anulado".
+   - Error `FORBIDDEN_NOT_RESPONSIBLE`: mensaje específico.
+   - Error `PAYMENT_ALREADY_VOIDED`: mensaje + fila marcada como "Anulado".
+
+### Decisiones de diseño
+
+1. **Refactor `periods` → `allPeriods` + `pendingPeriods` derivado**: el state original almacenaba la lista YA FILTRADA (sin PAGADO), lo que hacía imposible cruzar pagos del historial con sus períodos. El refactor guarda la lista cruda y filtra en render. Esto es más simple y correcto — la fuente de verdad es `allPeriods`, y `pendingPeriods` es una vista derivada.
+
+2. **"Obligación eliminada" en vez de ocultar filas huérfanas**: en "Pagos pendientes" se excluyen períodos sin obligación (no tienen sentido mostrar algo que no se puede pagar). En el historial, en cambio, es un registro contable — ocultar filas rompería la trazabilidad. Se muestra "Obligación eliminada" y se oculta el botón "Anular" (no se puede verificar permisos sin la obligación).
+
+3. **Anulación no resincroniza pendientes**: cuando se anula un pago, el backend recalcula el status del período (`PENDIENTE` o `VENCIDO`). Sin embargo, en este prompt la sección "Pagos pendientes" NO se resincroniza automáticamente al anular un pago desde el historial. La razón: haría falta refetchear `listPeriods` después de cada void, o mantener un state derivado complejo. La simplificación (el usuario recarga la página) es aceptable para el MVP. Se documenta como decisión deliberada.
+
+4. **`voidError` se muestra debajo del historial**: el error de void se muestra después de la tabla de historial (no dentro de la fila) para que sea visible incluso cuando se cierra la confirmación inline.
+
+### Tests — 11 nuevos, 103 total, todos pasando
+
+```
+$ cd frontend && npm test
+✓ tests/payments-page.test.tsx (27 tests) 1070ms
+Test Files  11 passed (11)
+      Tests  103 passed (103)
+```
+
+### Build y lint
+
+```
+$ cd frontend && npm run build
+✓ Compiled successfully
+Route (app)                              Size     First Load JS
+├ ○ /payments                            5.16 kB         102 kB
+
+$ cd frontend && npm run lint
+✔ No ESLint warnings or errors
+```
+
+### Archivos creados o modificados
+
+```
+frontend/src/lib/
+└── api-client.ts                 (MODIFICADO — +listPayments, +voidPayment)
+
+frontend/src/app/(app)/payments/
+└── page.tsx                      (MODIFICADO — refactor periods→allPeriods, +historial, +void)
+
+frontend/tests/
+├── handlers.ts                   (MODIFICADO — +GET /payments)
+└── payments-page.test.tsx        (MODIFICADO — +11 tests, 16→27)
+```
+
+### Único frente pendiente
+
+**Select de responsable en obligaciones**: bloqueado hasta que exista `GET /groups/{group_id}/members` en el backend (no es un problema de frontend). Una vez que exista, se agrega `responsible_user_id` al form de creación/edición de obligaciones, y los members podrán pagar sus obligaciones asignadas.

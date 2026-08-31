@@ -9,6 +9,7 @@ import { server } from "./server";
 const API_BASE = "http://localhost:8000/api/v1";
 
 const mockReplace = vi.hoisted(() => vi.fn());
+const mockPathname = vi.hoisted(() => ({ value: "/dashboard" }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -19,10 +20,12 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
     prefetch: vi.fn(),
   }),
+  usePathname: () => mockPathname.value,
 }));
 
 afterEach(() => {
   mockReplace.mockClear();
+  mockPathname.value = "/dashboard";
 });
 
 describe("AppLayout", () => {
@@ -114,5 +117,116 @@ describe("AppLayout", () => {
     });
 
     expect(screen.getByDisplayValue("Familia García")).toBeDefined();
+  });
+
+  it("has sidebar with Dashboard and Obligaciones links", async () => {
+    mockPathname.value = "/dashboard";
+
+    server.use(
+      http.get(`${API_BASE}/groups`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            name: "Familia García",
+            created_by: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            my_role: "owner",
+          },
+        ]);
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AppLayout>
+          <div>child</div>
+        </AppLayout>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Familia García")).toBeDefined();
+    });
+
+    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
+    const obligationsLink = screen.getByRole("link", { name: /obligaciones/i });
+
+    expect(dashboardLink).toHaveAttribute("href", "/dashboard");
+    expect(obligationsLink).toHaveAttribute("href", "/obligations");
+
+    expect(dashboardLink.className).toMatch(/bg-blue-50/);
+    expect(obligationsLink.className).not.toMatch(/bg-blue-50/);
+  });
+
+  it("highlights Obligaciones link when on /obligations", async () => {
+    mockPathname.value = "/obligations";
+
+    server.use(
+      http.get(`${API_BASE}/groups`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            name: "Familia García",
+            created_by: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            my_role: "owner",
+          },
+        ]);
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AppLayout>
+          <div>child</div>
+        </AppLayout>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Familia García")).toBeDefined();
+    });
+
+    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
+    const obligationsLink = screen.getByRole("link", { name: /obligaciones/i });
+
+    expect(dashboardLink.className).not.toMatch(/bg-blue-50/);
+    expect(obligationsLink.className).toMatch(/bg-blue-50/);
+  });
+
+  it("has Pagos link in sidebar with href /payments", async () => {
+    mockPathname.value = "/dashboard";
+
+    server.use(
+      http.get(`${API_BASE}/groups`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            name: "Familia García",
+            created_by: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            my_role: "owner",
+          },
+        ]);
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AppLayout>
+          <div>child</div>
+        </AppLayout>
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Familia García")).toBeDefined();
+    });
+
+    const pagosLink = screen.getByRole("link", { name: /pagos/i });
+    expect(pagosLink).toHaveAttribute("href", "/payments");
   });
 });

@@ -220,3 +220,165 @@ export async function logout(): Promise<void> {
 export async function getMe(): Promise<UserResponse> {
   return apiFetch<UserResponse>("/users/me");
 }
+
+export interface Obligation {
+  id: number;
+  group_id: number;
+  category_id: number | null;
+  payment_method_id: number | null;
+  responsible_user_id: number | null;
+  name: string;
+  provider_name: string | null;
+  external_reference: string | null;
+  notes: string | null;
+  currency: "COP" | "USD";
+  expected_amount_cents: number;
+  is_variable_amount: boolean;
+  is_subscription: boolean;
+  auto_debit: boolean;
+  is_essential: boolean;
+  periodicity: "MONTHLY" | "BIMONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL";
+  due_day: number;
+  due_month: number | null;
+  start_date: string;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ObligationCreateInput {
+  name: string;
+  provider_name?: string;
+  notes?: string;
+  currency: "COP" | "USD";
+  expected_amount_cents: number;
+  is_variable_amount: boolean;
+  is_subscription: boolean;
+  auto_debit: boolean;
+  is_essential: boolean;
+  periodicity: "MONTHLY" | "BIMONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL";
+  due_day: number;
+  due_month?: number | null;
+  start_date: string;
+  end_date?: string | null;
+}
+
+export async function listObligations(
+  groupId: number
+): Promise<Obligation[]> {
+  return apiFetch<Obligation[]>(`/groups/${groupId}/obligations`);
+}
+
+export async function createObligation(
+  groupId: number,
+  data: ObligationCreateInput
+): Promise<Obligation> {
+  return apiFetch<Obligation>(`/groups/${groupId}/obligations`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ObligationUpdateInput {
+  name?: string;
+  provider_name?: string | null;
+  notes?: string | null;
+  currency?: "COP" | "USD";
+  expected_amount_cents?: number;
+  is_variable_amount?: boolean;
+  is_subscription?: boolean;
+  auto_debit?: boolean;
+  is_essential?: boolean;
+  periodicity?: "MONTHLY" | "BIMONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL";
+  due_day?: number;
+  due_month?: number | null;
+  start_date?: string;
+  end_date?: string | null;
+}
+
+export async function getObligation(
+  groupId: number,
+  id: number
+): Promise<Obligation> {
+  return apiFetch<Obligation>(`/groups/${groupId}/obligations/${id}`);
+}
+
+export async function updateObligation(
+  groupId: number,
+  id: number,
+  data: ObligationUpdateInput
+): Promise<Obligation> {
+  return apiFetch<Obligation>(`/groups/${groupId}/obligations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deactivateObligation(
+  groupId: number,
+  id: number
+): Promise<void> {
+  return apiFetch<void>(`/groups/${groupId}/obligations/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export interface ObligationPeriod {
+  id: number;
+  obligation_id: number;
+  period_month: string;
+  due_date: string;
+  status: "PENDIENTE" | "PAGADO" | "VENCIDO";
+  created_at: string;
+}
+
+export async function listPeriods(groupId: number): Promise<ObligationPeriod[]> {
+  return apiFetch<ObligationPeriod[]>(`/groups/${groupId}/periods`);
+}
+
+export interface PaymentCreateInput {
+  amount_cents: number;
+  currency: "COP" | "USD";
+  paid_at: string;
+  notes?: string;
+  receipt_url?: string;
+}
+
+export interface Payment {
+  id: number;
+  obligation_period_id: number;
+  registered_by_user_id: number;
+  amount_cents: number;
+  currency: "COP" | "USD";
+  paid_at: string;
+  notes: string | null;
+  receipt_url: string | null;
+  voided_at: string | null;
+  voided_by_user_id: number | null;
+  created_at: string;
+}
+
+export async function registerPayment(
+  groupId: number,
+  periodId: number,
+  data: PaymentCreateInput
+): Promise<Payment> {
+  return apiFetch<Payment>(`/groups/${groupId}/periods/${periodId}/payments`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function listPayments(groupId: number): Promise<Payment[]> {
+  return apiFetch<Payment[]>(`/groups/${groupId}/payments`);
+}
+
+export async function voidPayment(
+  groupId: number,
+  paymentId: number
+): Promise<Payment> {
+  return apiFetch<Payment>(`/groups/${groupId}/payments/${paymentId}/void`, {
+    method: "POST",
+  });
+}

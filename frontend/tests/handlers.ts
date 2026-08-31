@@ -62,6 +62,110 @@ export const handlers = [
       { status: 201 }
     );
   }),
+
+  http.get(`${API_BASE}/groups/:groupId/obligations`, () => {
+    return HttpResponse.json([]);
+  }),
+
+  http.post(`${API_BASE}/groups/:groupId/obligations`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json(
+      {
+        id: 1,
+        group_id: Number(body.group_id) || 1,
+        category_id: null,
+        payment_method_id: null,
+        responsible_user_id: null,
+        provider_name: body.provider_name ?? null,
+        external_reference: null,
+        notes: body.notes ?? null,
+        is_variable_amount: body.is_variable_amount ?? false,
+        is_subscription: body.is_subscription ?? false,
+        auto_debit: body.auto_debit ?? false,
+        is_essential: body.is_essential ?? true,
+        due_month: body.due_month ?? null,
+        end_date: body.end_date ?? null,
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        name: body.name,
+        currency: body.currency ?? "COP",
+        expected_amount_cents: body.expected_amount_cents ?? 0,
+        periodicity: body.periodicity ?? "MONTHLY",
+        due_day: body.due_day ?? 1,
+        start_date: body.start_date ?? "2026-01-01",
+      },
+      { status: 201 }
+    );
+  }),
+
+  http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+    return HttpResponse.json(
+      { detail: "Obligación no encontrada", code: "OBLIGATION_NOT_FOUND" },
+      { status: 404 }
+    );
+  }),
+
+  http.patch(`${API_BASE}/groups/:groupId/obligations/:id`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: 1,
+      group_id: 1,
+      category_id: null,
+      payment_method_id: null,
+      responsible_user_id: null,
+      provider_name: body.provider_name ?? null,
+      external_reference: null,
+      notes: body.notes ?? null,
+      is_variable_amount: body.is_variable_amount ?? false,
+      is_subscription: body.is_subscription ?? false,
+      auto_debit: body.auto_debit ?? false,
+      is_essential: body.is_essential ?? true,
+      due_month: body.due_month ?? null,
+      end_date: body.end_date ?? null,
+      is_active: true,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+      name: body.name ?? "Obligación",
+      currency: body.currency ?? "COP",
+      expected_amount_cents: body.expected_amount_cents ?? 0,
+      periodicity: body.periodicity ?? "MONTHLY",
+      due_day: body.due_day ?? 1,
+      start_date: body.start_date ?? "2026-01-01",
+    });
+  }),
+
+  http.delete(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${API_BASE}/groups/:groupId/periods`, () => {
+    return HttpResponse.json([]);
+  }),
+
+  http.post(
+    `${API_BASE}/groups/:groupId/periods/:periodId/payments`,
+    async ({ request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      return HttpResponse.json({
+        id: 1,
+        obligation_period_id: 1,
+        registered_by_user_id: 1,
+        amount_cents: body.amount_cents ?? 0,
+        currency: body.currency ?? "COP",
+        paid_at: body.paid_at ?? "2026-01-01",
+        notes: body.notes ?? null,
+        receipt_url: body.receipt_url ?? null,
+        voided_at: null,
+        voided_by_user_id: null,
+        created_at: "2026-01-01T00:00:00Z",
+      });
+    }
+  ),
+
+  http.get(`${API_BASE}/groups/:groupId/payments`, () => {
+    return HttpResponse.json([]);
+  }),
 ];
 
 export { mockUser };
