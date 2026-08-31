@@ -1,4 +1,4 @@
-# Backend — Gestor Familiar de Pagos y Facturas
+# Backend — Pendia
 
 ## Requisitos
 

@@ -299,6 +299,57 @@ class TestCreateObligation:
         assert resp.status_code == 403
         assert resp.json()["code"] == "FORBIDDEN_NOT_ADMIN"
 
+    def test_create_with_payment_method_id(self, client):
+        token, _ = _register(client, "oblcrt10@obl-test.com", full_name="Admin")
+        group_id = _create_group(client, token, "Obl PM Group")
+
+        # Create a payment method
+        pm_resp = client.post(
+            f"/api/v1/groups/{group_id}/payment-methods",
+            json={"kind": "CASH", "provider_name": "Efectivo", "label": "Caja chica", "holder_name": "Test User"},
+            headers=_auth_header(token),
+        )
+        assert pm_resp.status_code == 201
+        pm_id = pm_resp.json()["id"]
+
+        body = _create_obligation(
+            client, token, group_id,
+            name="Obl with PM",
+            payment_method_id=pm_id,
+        )
+        assert body["payment_method_id"] == pm_id
+
+    def test_create_payment_method_from_other_group_rejected(self, client):
+        token_a, _ = _register(client, "oblcrt11a@obl-test.com", full_name="AdminA")
+        token_b, _ = _register(client, "oblcrt11b@obl-test.com", full_name="AdminB")
+        group_a = _create_group(client, token_a, "Obl PM Group A")
+        group_b = _create_group(client, token_b, "Obl PM Group B")
+
+        # Create payment method in group A
+        pm_resp = client.post(
+            f"/api/v1/groups/{group_a}/payment-methods",
+            json={"kind": "CASH", "provider_name": "Efectivo", "label": "Caja chica", "holder_name": "Test User"},
+            headers=_auth_header(token_a),
+        )
+        assert pm_resp.status_code == 201
+        pm_id = pm_resp.json()["id"]
+
+        # Try to use it in group B
+        resp = client.post(
+            f"/api/v1/groups/{group_b}/obligations",
+            json={
+                "name": "Cross-group PM",
+                "expected_amount_cents": 100000,
+                "due_day": 15,
+                "periodicity": "MONTHLY",
+                "start_date": "2026-01-01",
+                "payment_method_id": pm_id,
+            },
+            headers=_auth_header(token_b),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "PAYMENT_METHOD_NOT_IN_GROUP"
+
     def test_create_generates_periods(self, client):
         token, _ = _register(client, "oblcrt9@obl-test.com", full_name="Admin")
         group_id = _create_group(client, token, "Obl Periods Gen")
@@ -488,6 +539,31 @@ class TestUpdateObligation:
             headers=_auth_header(token),
         )
         assert resp.status_code == 422
+
+    def test_update_payment_method_id(self, client):
+        token, _ = _register(client, "oblupd5@obl-test.com", full_name="Admin")
+        group_id = _create_group(client, token, "Obl Update PM")
+
+        body = _create_obligation(client, token, group_id)
+        obl_id = body["id"]
+        assert body["payment_method_id"] is None
+
+        # Create a payment method
+        pm_resp = client.post(
+            f"/api/v1/groups/{group_id}/payment-methods",
+            json={"kind": "CASH", "provider_name": "Efectivo", "label": "Caja chica", "holder_name": "Test User"},
+            headers=_auth_header(token),
+        )
+        assert pm_resp.status_code == 201
+        pm_id = pm_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/groups/{group_id}/obligations/{obl_id}",
+            json={"payment_method_id": pm_id},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["payment_method_id"] == pm_id
 
 
 # ---------------------------------------------------------------------------

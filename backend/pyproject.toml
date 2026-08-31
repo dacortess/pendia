@@ -1,7 +1,7 @@
 [project]
-name = "family-project-backend"
+name = "pendia-backend"
 version = "0.1.0"
-description = "Gestor Familiar de Pagos y Facturas — backend FastAPI"
+description = "Pendia — backend FastAPI"
 license = { text = "Proprietary - All Rights Reserved. See LICENSE." }
 requires-python = ">=3.10"
 dependencies = [

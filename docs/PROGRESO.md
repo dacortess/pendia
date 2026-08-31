@@ -1596,7 +1596,7 @@ Si un `PATCH` cambia `periodicity`, `due_day`, `start_date` o acorta `end_date` 
 
 ### 🟢 Endpoints candidatos que el frontend probablemente va a pedir
 
-- `GET /groups/{group_id}/members` — listado explícito de miembros (hoy solo se infiere indirectamente).
+- `GET /groups/{group_id}/members` — listado explícito de miembros (**resuelto 2026-08-31 — GET /groups/{group_id}/members**).
 - `GET /groups/{group_id}/payments/{id}` — detalle de un pago específico.
 - `?obligation_id=` en `GET /groups/{group_id}/periods` — para la vista de detalle de una obligación.
 
@@ -2625,3 +2625,184 @@ frontend/tests/
 ### Único frente pendiente
 
 **Select de responsable en obligaciones**: bloqueado hasta que exista `GET /groups/{group_id}/members` en el backend (no es un problema de frontend). Una vez que exista, se agrega `responsible_user_id` al form de creación/edición de obligaciones, y los members podrán pagar sus obligaciones asignadas.
+
+---
+
+## 2026-08-31 — Backend — GET /groups/{group_id}/members
+
+### Qué se implementó
+
+Endpoint `GET /groups/{group_id}/members` para listar todos los miembros de un grupo con su información de usuario (email, full_name, role, joined_at). Cualquier miembro del grupo puede verlo (solo lectura, NO requiere `require_admin`).
+
+La función de repositorio `list_members(db, group_id)` ya existía en `backend/app/groups/repository.py:57` con el query correcto (JOIN con User para traer email y full_name, ordenado por `joined_at`) pero nunca era llamada desde ningún lado. Solo se conectó vía service → router.
+
+**Archivos modificados:**
+
+1. **`backend/app/groups/service.py`** — Nueva función `list_members(db, group_id) -> list[dict]` que delega a `repo.list_members()`. Misma firma que las demás funciones de listado del proyecto.
+
+2. **`backend/app/groups/router.py`** — Nuevo endpoint:
+   - `GET /groups/{group_id}/members` con `response_model=list[MemberResponse]`
+   - Usa `Depends(get_current_membership)` (cualquier miembro puede listar)
+   - Ubicado justo antes de `POST /groups/{group_id}/members` para mantener el orden "listar" antes de "crear"
+
+3. **`backend/tests/test_groups.py`** — Nueva clase `TestListMembers` (5 tests):
+   - `test_list_members_owner_sees_all` — owner crea grupo, agrega member, GET devuelve 2 con user_id/email/full_name/role/joined_at
+   - `test_list_members_admin_can_view` — admin también puede hacer el GET y ve todos los miembros
+   - `test_list_members_member_can_view` — member (no admin/owner) también puede hacer el GET
+   - `test_list_members_not_group_member_forbidden` — usuario que NO pertenece al grupo recibe 403 con code "NOT_GROUP_MEMBER"
+   - `test_list_members_includes_correct_roles` — owner + admin + member, verifica roles correctos en la respuesta
+
+4. **`docs/adr/ADR-004-api-contract.md`** — Agregada línea `GET /api/v1/groups/{group_id}/members` en la sección Endpoints (MVP)
+
+### Motivación
+
+Desbloquear el select de "responsable" en el form de obligaciones del frontend (Capa Frontend 5/7), que quedó pendiente porque no existía este endpoint. Con este endpoint, el frontend puede llamar `GET /groups/{groupId}/members` y renderizar un `<select>` con los miembros del grupo para asignar `responsible_user_id`.
+
+### Verificación
+
+Verificado contra PostgreSQL real (`docker compose up -d postgres` + `alembic upgrade head`), no solo por lectura de código:
+
+```bash
+$ python -m pytest tests/test_groups.py -v
+44 passed, 5 warnings in 8.51s
+
+$ python -m pytest tests/ -v
+254 passed, 23 warnings in 32.17s
+```
+
+254 tests en verde (249 anteriores + 5 nuevos de `TestListMembers`), 0 failures. Coincide con lo esperado.
+
+### Backlog
+
+El ítem "Select de responsable en obligaciones" del frontend queda **desbloqueado** por este cambio. Se implementa en el siguiente prompt de frontend.
+
+---
+
+## 2026-08-31 — Capa Frontend 8: Select de responsable en ObligationForm
+
+### Qué se construyó
+
+1. **`api-client.ts`**:
+   - Interfaz `Member` (`user_id`, `email`, `full_name`, `role`, `joined_at`) — mismo shape que `MemberResponse` del backend.
+   - `listMembers(groupId)` → `GET /groups/{groupId}/members`, mismo patrón que `listObligations`.
+   - `responsible_user_id?: number | null` agregado a `ObligationCreateInput` y `ObligationUpdateInput` (la interfaz `Obligation` de respuesta ya lo tenía).
+
+2. **`ObligationForm.tsx`**:
+   - `responsible_user_id: number | null` en `ObligationFormValues` (default `null` al crear).
+   - Prop nueva `members?: Member[]` — el form sigue siendo un componente "tonto", no hace fetch propio, recibe la lista por prop (consistente con el resto del componente, que no tenía ningún `useEffect`).
+   - `<select>` "Responsable" opcional: primera opción "Sin asignar" (→ `null`), una `<option>` por member (`value=user_id`, texto `full_name`). Se envía explícitamente en el payload de create/update, incluyendo `null` cuando no hay selección (no se omite el campo).
+
+3. **`obligations/page.tsx` (creación) y `obligations/detail/page.tsx` (edición)**:
+   - `listMembers(currentGroup.id)` se carga en paralelo con `listObligations`/`getObligation` vía `Promise.all`, guardado en state `members`, pasado como prop a `ObligationForm`.
+   - En detalle: `initialValues.responsible_user_id = obligation.responsible_user_id`.
+
+4. **Tests**: handler por default `GET /groups/:groupId/members` en `tests/handlers.ts` (necesario porque ahora ambas páginas hacen ese fetch adicional al cargar). 7 tests nuevos entre `obligations-page.test.tsx` y `obligation-detail-page.test.tsx`: render del select con opciones, creación con responsable seleccionado, creación con "Sin asignar" (→ `null`), pre-selección en edición, PATCH con valor cambiado y con valor limpiado a `null`.
+
+### Verificación
+
+Revisado el diff completo línea por línea (no solo el resumen del modelo) y corrido yo mismo, no solo confiado en lo reportado:
+
+```
+$ npm run build
+✓ Compiled successfully (type-check de Next incluido)
+
+$ npm run lint
+✔ No ESLint warnings or errors
+
+$ npm test
+Test Files  11 passed (11)
+      Tests  110 passed (110)
+```
+
+Además, smoke test end-to-end contra backend real (Postgres vía `docker compose up -d postgres`, `uvicorn` en `127.0.0.1:8010`) replicando el contrato completo con `curl`: registrar 2 usuarios, crear grupo, agregar member, `GET /groups/{id}/members` (devuelve ambos con roles correctos), crear obligación con `responsible_user_id` seteado, confirmar que el member puede verla, y `PATCH` limpiando `responsible_user_id` a `null` — todo se comportó exactamente como espera el frontend nuevo. No se pudo probar el `<select>` en un navegador real (no hay herramienta de automatización de browser en este entorno), pero la lógica de renderizado queda cubierta por los 7 tests nuevos con Testing Library + jsdom.
+
+### Archivos creados o modificados
+
+```
+frontend/src/lib/
+└── api-client.ts                         (MODIFICADO — +Member, +listMembers, +responsible_user_id en inputs)
+
+frontend/src/components/
+└── ObligationForm.tsx                    (MODIFICADO — +select "Responsable")
+
+frontend/src/app/(app)/obligations/
+├── page.tsx                              (MODIFICADO — +members state, +listMembers en load)
+└── detail/page.tsx                       (MODIFICADO — +members state, +responsible_user_id en initialValues)
+
+frontend/tests/
+├── handlers.ts                           (MODIFICADO — +GET /members)
+├── obligations-page.test.tsx             (MODIFICADO — +3 tests)
+└── obligation-detail-page.test.tsx       (MODIFICADO — +4 tests)
+```
+
+### Backlog
+
+Con esto se cierra el punto "Select de responsable" — los members ya pueden quedar asignados como responsables de una obligación y (según Capa Frontend 6/7) pagar/anular las que tengan asignadas. Quedan pendientes del backlog original: selects de categoría y medio de pago en `ObligationForm` (`GET /groups/{id}/categories` y `GET /groups/{id}/payment-methods` ya existen en el backend, sin conectar todavía en el frontend), y el rename de branding a "Pendia".
+
+---
+
+## 2026-08-31 — Capa Frontend 9: Selects de categoría y medio de pago en ObligationForm
+
+### Qué se construyó
+
+Mismo patrón que el select de "Responsable" (Capa Frontend 8): `api-client.ts` gana `Category`, `PaymentMethod`, `listCategories(groupId)`, `listPaymentMethods(groupId)`, y `category_id`/`payment_method_id` en `ObligationCreateInput`/`ObligationUpdateInput`. `ObligationForm` gana dos `<select>` opcionales ("Categoría" → "Sin categoría", "Medio de pago" → "Sin especificar"), recibidos por prop (`categories`, `paymentMethods`), sin fetch propio. Ambas páginas (`obligations/page.tsx`, `obligations/detail/page.tsx`) cargan las 4 listas (obligaciones/members/categories/payment-methods) en un solo `Promise.all`.
+
+Detalle relevante: el select de medio de pago filtra a solo `is_active === true`, salvo que el `payment_method_id` actual del form apunte a uno inactivo (caso de edición de una obligación vieja) — en ese caso lo agrega igual a las opciones para no perder la selección existente.
+
+### Verificación
+
+Diff revisado línea por línea. Corrido yo mismo (no solo el resumen del modelo):
+
+```
+$ npm run build
+✓ Compiled successfully
+
+$ npm run lint
+✔ No ESLint warnings or errors
+
+$ npm test
+Test Files  11 passed (11)
+      Tests  118 passed (118)
+```
+
+### 🔴 Bug de backend encontrado en el smoke test — bloqueante
+
+Al probar el flujo real contra Postgres (crear categoría custom, crear medio de pago, crear obligación con ambos ids), **crear/editar una obligación con `payment_method_id` no nulo devuelve 500**:
+
+```
+File "app/obligations/service.py", line 73, in _validate_payment_method
+    select(PaymentMethod).where(PaymentMethod.id == payment_method_id)
+NameError: name 'select' is not defined. Did you forget to import 'select'?
+```
+
+`_validate_category` (la función de arriba en el mismo archivo) sí importa `select` localmente; `_validate_payment_method` no. Afecta tanto `create_obligation` como `update_obligation`. Ningún test de `tests/test_obligations.py` cubre `payment_method_id` no nulo, por eso las 254 pruebas pasaban en verde sin detectarlo — el frontend nuevo es el primer código que efectivamente manda ese campo.
+
+Pre-existente, no introducido por este prompt.
+
+**Resuelto y verificado** — fix de una línea (`from sqlalchemy import select` dentro de `_validate_payment_method`, mismo estilo que `_validate_category`) + 3 tests de regresión en `test_obligations.py` (create con PM, create con PM de otro grupo rechazado, update seteando PM). Corrido yo mismo contra Postgres real:
+
+```
+$ python -m pytest tests/test_obligations.py -v
+27 passed, 5 warnings in 4.12s
+
+$ python -m pytest tests/ -v
+257 passed, 23 warnings in 32.52s
+```
+
+Repetí el smoke test que había fallado (crear medio de pago + obligación con `payment_method_id`) — ahora responde `201` con el `payment_method_id` correcto en vez de `500`.
+
+### Archivos creados o modificados
+
+```
+frontend/src/lib/api-client.ts                      (MODIFICADO — +Category, +PaymentMethod, +listCategories, +listPaymentMethods)
+frontend/src/components/ObligationForm.tsx           (MODIFICADO — +select Categoría, +select Medio de pago)
+frontend/src/app/(app)/obligations/page.tsx           (MODIFICADO — +categories/paymentMethods state)
+frontend/src/app/(app)/obligations/detail/page.tsx    (MODIFICADO — +categories/paymentMethods state)
+frontend/tests/handlers.ts                            (MODIFICADO — +GET /categories, +GET /payment-methods)
+frontend/tests/obligations-page.test.tsx              (MODIFICADO — +5 tests)
+frontend/tests/obligation-detail-page.test.tsx        (MODIFICADO — +4 tests)
+```
+
+### Backlog
+
+Con el fix ya verificado, el único punto que queda del backlog original es el rename de branding a "Pendia".

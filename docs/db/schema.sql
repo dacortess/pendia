@@ -1,4 +1,4 @@
--- Gestor Familiar de Pagos — Schema PostgreSQL (MVP) — v3
+-- Pendia — Schema PostgreSQL (MVP) — v3
 -- Cambios respecto a v2: ver docs/adr/ADR-014 (invitación por código+QR) y
 -- ADR-015 (monedas soportadas). v1→v2: ver ADR-013. Convención: snake_case,
 -- PK bigserial, timestamps con timezone, soft-delete NO se usa (borrado

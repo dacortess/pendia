@@ -402,4 +402,424 @@ describe("ObligationDetailPage", () => {
       ).toBeDefined();
     });
   });
+
+  it("edit: shows responsible select pre-selected with obligation responsible_user_id", async () => {
+    const obligationWithResponsible = {
+      ...mockObligation,
+      responsible_user_id: 2,
+    };
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(obligationWithResponsible);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/members`, () => {
+        return HttpResponse.json([
+          {
+            user_id: 1,
+            email: "owner@test.com",
+            full_name: "Owner User",
+            role: "owner",
+            joined_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            user_id: 2,
+            email: "member@test.com",
+            full_name: "Member User",
+            role: "member",
+            joined_at: "2026-01-02T00:00:00Z",
+          },
+        ]);
+      })
+    );
+
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await userEvent.click(screen.getByText("Editar"));
+
+    const select = screen.getByLabelText(/responsable/i);
+    expect(select).toHaveValue("2");
+  });
+
+  it("edit: shows Sin asignar when responsible_user_id is null", async () => {
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(mockObligation);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/members`, () => {
+        return HttpResponse.json([
+          {
+            user_id: 1,
+            email: "owner@test.com",
+            full_name: "Owner User",
+            role: "owner",
+            joined_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      })
+    );
+
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await userEvent.click(screen.getByText("Editar"));
+
+    const select = screen.getByLabelText(/responsable/i);
+    expect(select).toHaveValue("");
+  });
+
+  it("edit: PATCH includes responsible_user_id when changed", async () => {
+    let patchBody: Record<string, unknown> = {};
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(mockObligation);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/members`, () => {
+        return HttpResponse.json([
+          {
+            user_id: 1,
+            email: "owner@test.com",
+            full_name: "Owner User",
+            role: "owner",
+            joined_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            user_id: 2,
+            email: "member@test.com",
+            full_name: "Member User",
+            role: "member",
+            joined_at: "2026-01-02T00:00:00Z",
+          },
+        ]);
+      }),
+      http.patch(`${API_BASE}/groups/:groupId/obligations/:id`, async ({ request }) => {
+        patchBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          ...mockObligation,
+          responsible_user_id: patchBody.responsible_user_id,
+        });
+      })
+    );
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await user.click(screen.getByText("Editar"));
+
+    await user.selectOptions(screen.getByLabelText(/responsable/i), "2");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(patchBody.responsible_user_id).toBe(2);
+    });
+  });
+
+  it("edit: PATCH includes null responsible_user_id when cleared", async () => {
+    const obligationWithResponsible = {
+      ...mockObligation,
+      responsible_user_id: 1,
+    };
+    let patchBody: Record<string, unknown> = {};
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(obligationWithResponsible);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/members`, () => {
+        return HttpResponse.json([
+          {
+            user_id: 1,
+            email: "owner@test.com",
+            full_name: "Owner User",
+            role: "owner",
+            joined_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.patch(`${API_BASE}/groups/:groupId/obligations/:id`, async ({ request }) => {
+        patchBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          ...mockObligation,
+          responsible_user_id: patchBody.responsible_user_id,
+        });
+      })
+    );
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await user.click(screen.getByText("Editar"));
+
+    const select = screen.getByLabelText(/responsable/i);
+    expect(select).toHaveValue("1");
+
+    await user.selectOptions(select, "");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(patchBody.responsible_user_id).toBeNull();
+    });
+  });
+
+  it("edit: shows category select pre-selected with obligation category_id", async () => {
+    const obligationWithCategory = {
+      ...mockObligation,
+      category_id: 1,
+      payment_method_id: null,
+    };
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(obligationWithCategory);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/categories`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: null,
+            name: "Servicios",
+            icon: "🏠",
+            is_system: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            id: 2,
+            group_id: null,
+            name: "Entretenimiento",
+            icon: null,
+            is_system: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/payment-methods`, () => {
+        return HttpResponse.json([]);
+      })
+    );
+
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await userEvent.click(screen.getByText("Editar"));
+
+    const select = screen.getByLabelText(/categoría/i);
+    expect(select).toHaveValue("1");
+  });
+
+  it("edit: shows payment method pre-selected even if inactive", async () => {
+    const obligationWithPaymentMethod = {
+      ...mockObligation,
+      category_id: null,
+      payment_method_id: 3,
+    };
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(obligationWithPaymentMethod);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/categories`, () => {
+        return HttpResponse.json([]);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/payment-methods`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: 1,
+            kind: "CREDIT_CARD",
+            provider_name: "Bancolombia",
+            label: "Visa ****1234",
+            last4: "1234",
+            masked_key: null,
+            holder_name: "Juan García",
+            is_active: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            id: 3,
+            group_id: 1,
+            kind: "CASH",
+            provider_name: "Efectivo",
+            label: "Efectivo viejo",
+            last4: null,
+            masked_key: null,
+            holder_name: "Juan García",
+            is_active: false,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      })
+    );
+
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await userEvent.click(screen.getByText("Editar"));
+
+    const select = screen.getByLabelText(/medio de pago/i);
+    expect(select).toHaveValue("3");
+  });
+
+  it("edit: PATCH includes category_id and payment_method_id when changed", async () => {
+    let patchBody: Record<string, unknown> = {};
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(mockObligation);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/categories`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: null,
+            name: "Servicios",
+            icon: "🏠",
+            is_system: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/payment-methods`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: 1,
+            kind: "CREDIT_CARD",
+            provider_name: "Bancolombia",
+            label: "Visa ****1234",
+            last4: "1234",
+            masked_key: null,
+            holder_name: "Juan García",
+            is_active: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.patch(`${API_BASE}/groups/:groupId/obligations/:id`, async ({ request }) => {
+        patchBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          ...mockObligation,
+          category_id: patchBody.category_id,
+          payment_method_id: patchBody.payment_method_id,
+        });
+      })
+    );
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await user.click(screen.getByText("Editar"));
+
+    await user.selectOptions(screen.getByLabelText(/categoría/i), "1");
+    await user.selectOptions(screen.getByLabelText(/medio de pago/i), "1");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(patchBody.category_id).toBe(1);
+      expect(patchBody.payment_method_id).toBe(1);
+    });
+  });
+
+  it("edit: PATCH includes null category_id and payment_method_id when cleared", async () => {
+    const obligationWithBoth = {
+      ...mockObligation,
+      category_id: 1,
+      payment_method_id: 1,
+    };
+    let patchBody: Record<string, unknown> = {};
+
+    server.use(
+      http.get(`${API_BASE}/groups/:groupId/obligations/:id`, () => {
+        return HttpResponse.json(obligationWithBoth);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/categories`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: null,
+            name: "Servicios",
+            icon: "🏠",
+            is_system: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.get(`${API_BASE}/groups/:groupId/payment-methods`, () => {
+        return HttpResponse.json([
+          {
+            id: 1,
+            group_id: 1,
+            kind: "CREDIT_CARD",
+            provider_name: "Bancolombia",
+            label: "Visa ****1234",
+            last4: "1234",
+            masked_key: null,
+            holder_name: "Juan García",
+            is_active: true,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ]);
+      }),
+      http.patch(`${API_BASE}/groups/:groupId/obligations/:id`, async ({ request }) => {
+        patchBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          ...mockObligation,
+          category_id: patchBody.category_id,
+          payment_method_id: patchBody.payment_method_id,
+        });
+      })
+    );
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.queryByText(/cargando/i)).toBeNull();
+    });
+
+    await user.click(screen.getByText("Editar"));
+
+    const categorySelect = screen.getByLabelText(/categoría/i);
+    const paymentSelect = screen.getByLabelText(/medio de pago/i);
+    expect(categorySelect).toHaveValue("1");
+    expect(paymentSelect).toHaveValue("1");
+
+    await user.selectOptions(categorySelect, "");
+    await user.selectOptions(paymentSelect, "");
+
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(patchBody.category_id).toBeNull();
+      expect(patchBody.payment_method_id).toBeNull();
+    });
+  });
 });

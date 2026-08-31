@@ -236,6 +236,11 @@ def remove_member(db: Session, *, group_id: int, target_user_id: int, actor_user
     db.commit()
 
 
+def list_members(db: Session, group_id: int) -> list[dict]:
+    """Return all members of a group with user info (email, full_name, role)."""
+    return repo.list_members(db, group_id)
+
+
 def reset_member_password(
     db: Session, *, group_id: int, target_user_id: int, actor_user_id: int
 ) -> dict:

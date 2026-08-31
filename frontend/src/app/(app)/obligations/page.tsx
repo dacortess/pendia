@@ -6,7 +6,13 @@ import { useGroups } from "@/lib/groups-context";
 import {
   listObligations,
   createObligation,
+  listMembers,
+  listCategories,
+  listPaymentMethods,
   type Obligation,
+  type Member,
+  type Category,
+  type PaymentMethod,
   type ObligationCreateInput,
   type ObligationUpdateInput,
   ApiError,
@@ -21,6 +27,9 @@ import ObligationForm from "@/components/ObligationForm";
 export default function ObligationsPage() {
   const { currentGroup, loading: groupsLoading } = useGroups();
   const [obligations, setObligations] = useState<Obligation[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -40,9 +49,17 @@ export default function ObligationsPage() {
 
     async function load() {
       try {
-        const data = await listObligations(currentGroup!.id);
+        const [obligationsData, membersData, categoriesData, paymentMethodsData] = await Promise.all([
+          listObligations(currentGroup!.id),
+          listMembers(currentGroup!.id),
+          listCategories(currentGroup!.id),
+          listPaymentMethods(currentGroup!.id),
+        ]);
         if (!cancelled) {
-          setObligations(data);
+          setObligations(obligationsData);
+          setMembers(membersData);
+          setCategories(categoriesData);
+          setPaymentMethods(paymentMethodsData);
           setLoading(false);
         }
       } catch {
@@ -138,6 +155,9 @@ export default function ObligationsPage() {
           submitLabel="Crear obligación"
           error={createError}
           submitting={creating}
+          members={members}
+          categories={categories}
+          paymentMethods={paymentMethods}
         />
       )}
 

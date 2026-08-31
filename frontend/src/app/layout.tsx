@@ -3,8 +3,8 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
-  title: "Gestor Familiar de Pagos",
-  description: "Gestor familiar de pagos y facturas",
+  title: "Pendia",
+  description: "Pendia — gestor familiar de pagos y facturas",
 };
 
 export default function RootLayout({

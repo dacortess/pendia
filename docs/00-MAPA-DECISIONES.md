@@ -1,4 +1,4 @@
-# Mapa de decisiones — Gestor Familiar de Pagos y Facturas
+# Mapa de decisiones — Pendia
 
 ## Destino
 

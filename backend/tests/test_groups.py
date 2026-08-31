@@ -396,6 +396,118 @@ class TestAddMember:
 
 
 # ---------------------------------------------------------------------------
+# GET /groups/{group_id}/members — list members
+# ---------------------------------------------------------------------------
+
+class TestListMembers:
+    def test_list_members_owner_sees_all(self, client):
+        token_owner, _ = _register(client, "lm-own@groups-test.com", full_name="LM Owner")
+        _register(client, "lm-mbr@groups-test.com", full_name="LM Member")
+
+        resp = client.post("/api/v1/groups", json={"name": "LM Group"}, headers=_auth_header(token_owner))
+        group_id = resp.json()["id"]
+
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-mbr@groups-test.com", "role": "member"},
+            headers=_auth_header(token_owner),
+        )
+
+        resp2 = client.get(f"/api/v1/groups/{group_id}/members", headers=_auth_header(token_owner))
+        assert resp2.status_code == 200
+        members = resp2.json()
+        assert len(members) == 2
+        emails = {m["email"] for m in members}
+        assert emails == {"lm-own@groups-test.com", "lm-mbr@groups-test.com"}
+        for m in members:
+            assert "user_id" in m
+            assert "email" in m
+            assert "full_name" in m
+            assert "role" in m
+            assert "joined_at" in m
+
+    def test_list_members_admin_can_view(self, client):
+        token_owner, _ = _register(client, "lm-adm-own@groups-test.com", full_name="LM Adm Owner")
+        token_admin, _ = _register(client, "lm-adm@groups-test.com", full_name="LM Admin")
+        _register(client, "lm-adm-mbr@groups-test.com", full_name="LM Adm Member")
+
+        resp = client.post("/api/v1/groups", json={"name": "LM Adm Group"}, headers=_auth_header(token_owner))
+        group_id = resp.json()["id"]
+
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-adm@groups-test.com", "role": "admin"},
+            headers=_auth_header(token_owner),
+        )
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-adm-mbr@groups-test.com", "role": "member"},
+            headers=_auth_header(token_owner),
+        )
+
+        resp2 = client.get(f"/api/v1/groups/{group_id}/members", headers=_auth_header(token_admin))
+        assert resp2.status_code == 200
+        assert len(resp2.json()) == 3
+
+    def test_list_members_member_can_view(self, client):
+        token_owner, _ = _register(client, "lm-mbr-own@groups-test.com", full_name="LM Mbr Owner")
+        token_member, _ = _register(client, "lm-mbr2@groups-test.com", full_name="LM Mbr Member")
+
+        resp = client.post("/api/v1/groups", json={"name": "LM Mbr Group"}, headers=_auth_header(token_owner))
+        group_id = resp.json()["id"]
+
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-mbr2@groups-test.com", "role": "member"},
+            headers=_auth_header(token_owner),
+        )
+
+        resp2 = client.get(f"/api/v1/groups/{group_id}/members", headers=_auth_header(token_member))
+        assert resp2.status_code == 200
+        assert len(resp2.json()) == 2
+
+    def test_list_members_not_group_member_forbidden(self, client):
+        token_owner, _ = _register(client, "lm-forb-own@groups-test.com", full_name="LM Forb Owner")
+        token_stranger, _ = _register(client, "lm-stranger@groups-test.com", full_name="LM Stranger")
+
+        resp = client.post("/api/v1/groups", json={"name": "LM Forb Group"}, headers=_auth_header(token_owner))
+        group_id = resp.json()["id"]
+
+        resp2 = client.get(f"/api/v1/groups/{group_id}/members", headers=_auth_header(token_stranger))
+        assert resp2.status_code == 403
+        assert resp2.json()["code"] == "NOT_GROUP_MEMBER"
+
+    def test_list_members_includes_correct_roles(self, client):
+        token_owner, _ = _register(client, "lm-roles-own@groups-test.com", full_name="LM Roles Owner")
+        _register(client, "lm-roles-adm@groups-test.com", full_name="LM Roles Admin")
+        _register(client, "lm-roles-mbr@groups-test.com", full_name="LM Roles Member")
+
+        resp = client.post("/api/v1/groups", json={"name": "LM Roles Group"}, headers=_auth_header(token_owner))
+        group_id = resp.json()["id"]
+
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-roles-adm@groups-test.com", "role": "admin"},
+            headers=_auth_header(token_owner),
+        )
+        client.post(
+            f"/api/v1/groups/{group_id}/members",
+            json={"email": "lm-roles-mbr@groups-test.com", "role": "member"},
+            headers=_auth_header(token_owner),
+        )
+
+        resp2 = client.get(f"/api/v1/groups/{group_id}/members", headers=_auth_header(token_owner))
+        assert resp2.status_code == 200
+        members = resp2.json()
+        assert len(members) == 3
+
+        roles_by_email = {m["email"]: m["role"] for m in members}
+        assert roles_by_email["lm-roles-own@groups-test.com"] == "owner"
+        assert roles_by_email["lm-roles-adm@groups-test.com"] == "admin"
+        assert roles_by_email["lm-roles-mbr@groups-test.com"] == "member"
+
+
+# ---------------------------------------------------------------------------
 # PATCH /groups/{group_id}/members/{user_id} — change role
 # ---------------------------------------------------------------------------
 

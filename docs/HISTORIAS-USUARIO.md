@@ -1,4 +1,4 @@
-# Historias de usuario — Gestor Familiar de Pagos y Facturas (MVP)
+# Historias de usuario — Pendia (MVP)
 
 Formato: `Como <rol>, quiero <acción>, para <beneficio>`, con criterios de
 aceptación en Gherkin resumido. Rol referido según `GroupMembership.role`

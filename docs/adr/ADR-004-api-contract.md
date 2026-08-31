@@ -29,6 +29,7 @@ POST   /api/v1/groups
 GET    /api/v1/groups                                 (grupos del usuario actual)
 GET    /api/v1/groups/{group_id}
 PATCH  /api/v1/groups/{group_id}                       (owner)
+GET    /api/v1/groups/{group_id}/members               (lista miembros, cualquier miembro)
 POST   /api/v1/groups/{group_id}/members               (agregar por email, admin+ — alternativa secundaria, ADR-014)
 PATCH  /api/v1/groups/{group_id}/members/{user_id}      (cambiar rol, admin+)
 DELETE /api/v1/groups/{group_id}/members/{user_id}      (admin+)

@@ -1,4 +1,4 @@
-# Requisitos no funcionales — Gestor Familiar de Pagos y Facturas
+# Requisitos no funcionales — Pendia
 
 Cada RNF referencia el ADR que lo sustenta cuando aplica, y es verificable
 (no aspiracional) — se puede escribir un test o un check de CI contra él.

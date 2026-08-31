@@ -1,4 +1,4 @@
-# ERD — Gestor Familiar de Pagos (v3)
+# ERD — Pendia (v3)
 
 ```
 User ──< GroupMembership >── Group ──< GroupInviteCode

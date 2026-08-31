@@ -67,6 +67,95 @@ export const handlers = [
     return HttpResponse.json([]);
   }),
 
+  http.get(`${API_BASE}/groups/:groupId/members`, () => {
+    return HttpResponse.json([
+      {
+        user_id: 1,
+        email: "test@example.com",
+        full_name: "Test User",
+        role: "owner",
+        joined_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        user_id: 2,
+        email: "other@example.com",
+        full_name: "Other User",
+        role: "member",
+        joined_at: "2026-01-02T00:00:00Z",
+      },
+    ]);
+  }),
+
+  http.get(`${API_BASE}/groups/:groupId/categories`, () => {
+    return HttpResponse.json([
+      {
+        id: 1,
+        group_id: null,
+        name: "Servicios",
+        icon: "🏠",
+        is_system: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: 2,
+        group_id: null,
+        name: "Entretenimiento",
+        icon: null,
+        is_system: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: 3,
+        group_id: 1,
+        name: "Transporte",
+        icon: "🚗",
+        is_system: false,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ]);
+  }),
+
+  http.get(`${API_BASE}/groups/:groupId/payment-methods`, () => {
+    return HttpResponse.json([
+      {
+        id: 1,
+        group_id: 1,
+        kind: "CREDIT_CARD",
+        provider_name: "Bancolombia",
+        label: "Visa ****1234",
+        last4: "1234",
+        masked_key: null,
+        holder_name: "Juan García",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: 2,
+        group_id: 1,
+        kind: "BANK_ACCOUNT",
+        provider_name: "Nequi",
+        label: "Cuenta principal",
+        last4: null,
+        masked_key: null,
+        holder_name: "Juan García",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: 3,
+        group_id: 1,
+        kind: "CASH",
+        provider_name: "Efectivo",
+        label: "Efectivo viejo",
+        last4: null,
+        masked_key: null,
+        holder_name: "Juan García",
+        is_active: false,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ]);
+  }),
+
   http.post(`${API_BASE}/groups/:groupId/obligations`, async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json(

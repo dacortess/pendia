@@ -68,6 +68,7 @@ def _validate_payment_method(
     db: Session, payment_method_id: int, group_id: int
 ) -> None:
     """Verify payment method belongs to the same group."""
+    from sqlalchemy import select
     from app.payment_methods.models import PaymentMethod
     pm = db.execute(
         select(PaymentMethod).where(PaymentMethod.id == payment_method_id)

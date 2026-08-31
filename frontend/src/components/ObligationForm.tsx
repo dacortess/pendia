@@ -4,6 +4,9 @@ import { useState } from "react";
 import type {
   ObligationCreateInput,
   ObligationUpdateInput,
+  Member,
+  Category,
+  PaymentMethod,
 } from "@/lib/api-client";
 
 export interface ObligationFormValues {
@@ -21,6 +24,9 @@ export interface ObligationFormValues {
   due_month: number | null;
   start_date: string;
   end_date: string | null;
+  responsible_user_id: number | null;
+  category_id: number | null;
+  payment_method_id: number | null;
 }
 
 interface ObligationFormProps {
@@ -33,6 +39,9 @@ interface ObligationFormProps {
   submitLabel: string;
   error?: string | null;
   submitting?: boolean;
+  members?: Member[];
+  categories?: Category[];
+  paymentMethods?: PaymentMethod[];
 }
 
 const DEFAULT_VALUES: ObligationFormValues = {
@@ -50,6 +59,9 @@ const DEFAULT_VALUES: ObligationFormValues = {
   due_month: null,
   start_date: "",
   end_date: "",
+  responsible_user_id: null,
+  category_id: null,
+  payment_method_id: null,
 };
 
 export default function ObligationForm({
@@ -60,6 +72,9 @@ export default function ObligationForm({
   submitLabel,
   error,
   submitting = false,
+  members = [],
+  categories = [],
+  paymentMethods = [],
 }: ObligationFormProps) {
   const defaults = initialValues ?? DEFAULT_VALUES;
   const [form, setForm] = useState<ObligationFormValues>(defaults);
@@ -137,6 +152,9 @@ export default function ObligationForm({
         end_date: form.end_date || undefined,
         provider_name: form.provider_name || undefined,
         notes: form.notes || undefined,
+        responsible_user_id: form.responsible_user_id,
+        category_id: form.category_id,
+        payment_method_id: form.payment_method_id,
       };
       await onSubmit(data);
     } else {
@@ -155,6 +173,9 @@ export default function ObligationForm({
         end_date: form.end_date || null,
         provider_name: form.provider_name || null,
         notes: form.notes || null,
+        responsible_user_id: form.responsible_user_id,
+        category_id: form.category_id,
+        payment_method_id: form.payment_method_id,
       };
       await onSubmit(data);
     }
@@ -209,6 +230,94 @@ export default function ObligationForm({
             }
             className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
           />
+        </div>
+
+        <div>
+          <label
+            htmlFor="responsable"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Responsable
+          </label>
+          <select
+            id="responsable"
+            value={form.responsible_user_id ?? ""}
+            onChange={(e) =>
+              updateField(
+                "responsible_user_id",
+                e.target.value === "" ? null : Number(e.target.value)
+              )
+            }
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            <option value="">Sin asignar</option>
+            {members.map((member) => (
+              <option key={member.user_id} value={member.user_id}>
+                {member.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="categoria"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Categoría
+          </label>
+          <select
+            id="categoria"
+            value={form.category_id ?? ""}
+            onChange={(e) =>
+              updateField(
+                "category_id",
+                e.target.value === "" ? null : Number(e.target.value)
+              )
+            }
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            <option value="">Sin categoría</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.icon ? `${category.icon} ${category.name}` : category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="medio-pago"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Medio de pago
+          </label>
+          <select
+            id="medio-pago"
+            value={form.payment_method_id ?? ""}
+            onChange={(e) =>
+              updateField(
+                "payment_method_id",
+                e.target.value === "" ? null : Number(e.target.value)
+              )
+            }
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          >
+            <option value="">Sin especificar</option>
+            {paymentMethods
+              .filter(
+                (pm) =>
+                  pm.is_active ||
+                  (form.payment_method_id !== null &&
+                    pm.id === form.payment_method_id)
+              )
+              .map((pm) => (
+                <option key={pm.id} value={pm.id}>
+                  {pm.label} ({pm.provider_name})
+                </option>
+              ))}
+          </select>
         </div>
 
         <div>

@@ -8,7 +8,13 @@ import {
   getObligation,
   updateObligation,
   deactivateObligation,
+  listMembers,
+  listCategories,
+  listPaymentMethods,
   type Obligation,
+  type Member,
+  type Category,
+  type PaymentMethod,
   type ObligationCreateInput,
   type ObligationUpdateInput,
   ApiError,
@@ -29,6 +35,9 @@ export default function ObligationDetailPage() {
   const obligationId = Number(searchParams.get("id"));
 
   const [obligation, setObligation] = useState<Obligation | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -53,9 +62,17 @@ export default function ObligationDetailPage() {
 
     async function load() {
       try {
-        const data = await getObligation(currentGroup!.id, obligationId);
+        const [obligationData, membersData, categoriesData, paymentMethodsData] = await Promise.all([
+          getObligation(currentGroup!.id, obligationId),
+          listMembers(currentGroup!.id),
+          listCategories(currentGroup!.id),
+          listPaymentMethods(currentGroup!.id),
+        ]);
         if (!cancelled) {
-          setObligation(data);
+          setObligation(obligationData);
+          setMembers(membersData);
+          setCategories(categoriesData);
+          setPaymentMethods(paymentMethodsData);
           setLoading(false);
         }
       } catch (err) {
@@ -181,6 +198,9 @@ export default function ObligationDetailPage() {
       due_month: obligation.due_month,
       start_date: obligation.start_date,
       end_date: obligation.end_date ?? "",
+      responsible_user_id: obligation.responsible_user_id,
+      category_id: obligation.category_id,
+      payment_method_id: obligation.payment_method_id,
     };
 
     return (
@@ -207,6 +227,9 @@ export default function ObligationDetailPage() {
           submitLabel="Guardar cambios"
           error={updateError}
           submitting={updating}
+          members={members}
+          categories={categories}
+          paymentMethods={paymentMethods}
         />
       </div>
     );

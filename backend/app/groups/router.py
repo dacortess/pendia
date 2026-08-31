@@ -280,6 +280,20 @@ def get_invite_code_qr(
 
 
 # ---------------------------------------------------------------------------
+# GET /groups/{group_id}/members — list members (any member)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{group_id}/members", response_model=list[MemberResponse])
+def list_members(
+    group_id: int,
+    membership: GroupMembership = Depends(get_current_membership),
+    db: Session = Depends(get_db_session),
+):
+    return service.list_members(db, group_id)
+
+
+# ---------------------------------------------------------------------------
 # POST /groups/{group_id}/members — add member by email (admin+)
 # ---------------------------------------------------------------------------
 

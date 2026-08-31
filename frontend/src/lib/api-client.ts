@@ -26,6 +26,36 @@ interface UserResponse {
   created_at: string;
 }
 
+export interface Member {
+  user_id: number;
+  email: string;
+  full_name: string;
+  role: string;
+  joined_at: string;
+}
+
+export interface Category {
+  id: number;
+  group_id: number | null;
+  name: string;
+  icon: string | null;
+  is_system: boolean;
+  created_at: string;
+}
+
+export interface PaymentMethod {
+  id: number;
+  group_id: number;
+  kind: string;
+  provider_name: string;
+  label: string;
+  last4: string | null;
+  masked_key: string | null;
+  holder_name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 interface AccessTokenResponse {
   access_token: string;
   token_type: string;
@@ -262,12 +292,27 @@ export interface ObligationCreateInput {
   due_month?: number | null;
   start_date: string;
   end_date?: string | null;
+  responsible_user_id?: number | null;
+  category_id?: number | null;
+  payment_method_id?: number | null;
 }
 
 export async function listObligations(
   groupId: number
 ): Promise<Obligation[]> {
   return apiFetch<Obligation[]>(`/groups/${groupId}/obligations`);
+}
+
+export async function listMembers(groupId: number): Promise<Member[]> {
+  return apiFetch<Member[]>(`/groups/${groupId}/members`);
+}
+
+export async function listCategories(groupId: number): Promise<Category[]> {
+  return apiFetch<Category[]>(`/groups/${groupId}/categories`);
+}
+
+export async function listPaymentMethods(groupId: number): Promise<PaymentMethod[]> {
+  return apiFetch<PaymentMethod[]>(`/groups/${groupId}/payment-methods`);
 }
 
 export async function createObligation(
@@ -295,6 +340,9 @@ export interface ObligationUpdateInput {
   due_month?: number | null;
   start_date?: string;
   end_date?: string | null;
+  responsible_user_id?: number | null;
+  category_id?: number | null;
+  payment_method_id?: number | null;
 }
 
 export async function getObligation(

@@ -1,50 +1,96 @@
-# Gestor Familiar de Pagos y Facturas — Documentación de arranque
+# Pendia
 
-Este repo, en este punto, es **solo planeación**. No hay código de
-aplicación todavía — es intencional (ver mapa de decisiones).
+Aplicación web para gestionar obligaciones de pago (servicios, suscripciones, cuotas) de un grupo familiar: quién debe pagar qué, cuándo vence, con qué medio de pago, y un historial de lo ya pagado.
 
-## Índice
+> Proyecto de portafolio. Backend y frontend completos y funcionando; ver [Licencia](#licencia) — código propietario, repo público solo como referencia.
 
-1. [`docs/00-MAPA-DECISIONES.md`](docs/00-MAPA-DECISIONES.md) — punto de entrada. Destino, decisiones tomadas, supuestos a validar, fuera de alcance.
-2. `docs/adr/` — 15 ADR con el razonamiento y trade-offs de cada decisión estructural.
-3. `docs/db/schema.sql` + `docs/db/erd.md` + `docs/db/seed.sql` — modelo de datos v3 (moneda COP/USD, invitación por código+QR, medios de pago de Colombia, categorías sistema+personalizadas, obligaciones enriquecidas, base de alertas), listo para generar los modelos de SQLAlchemy y la migración inicial de Alembic.
-4. `docs/adr/ADR-004-api-contract.md` — contrato REST completo del MVP, incluyendo invitación por código/QR.
-5. `docker-compose.yml`, `backend.env.example`, `frontend.env.example` — entorno local reproducible.
-6. `.github/workflows/ci.yml` y `.github/workflows/backup.yml` — pipeline listo para copiar en cuanto exista código que lo dispare.
-7. `docs/infra/security-checklist.md` — gate manual antes de exponer la app a la familia.
-8. `docs/adr/ADR-011-decisiones-adicionales.md` — decisiones que el análisis original dejó fuera (anulación de pagos, timezone, recuperación de contraseña, concurrencia, observabilidad, etc.).
-9. `docs/adr/ADR-012-arquitectura-alertas.md` — arquitectura $0 para alertas de vencimiento/mora vía WhatsApp (preparación de modelo, sin activar envíos en el MVP).
-10. `docs/adr/ADR-013-modelo-datos-v2.md` — correcciones al modelo de datos: naming, periodicidad anual, medios de pago colombianos, categorías sistema+personalizadas, campos de obligación.
-11. `docs/adr/ADR-014-invitacion-codigo-qr.md` — invitación a grupo por código alfanumérico de 8 caracteres + QR generado al vuelo.
-12. `docs/adr/ADR-015-monedas-soportadas.md` — moneda restringida a `COP`/`USD`, sin conversión automática.
-13. `docs/HISTORIAS-USUARIO.md` — 27 historias de usuario del MVP con criterios de aceptación, trazables a cada endpoint del contrato REST.
-14. `docs/REQUISITOS-NO-FUNCIONALES.md` — RNF de seguridad, rendimiento, disponibilidad, integridad de datos, usabilidad, mantenibilidad, costo y privacidad, cada uno con su forma de verificación.
+## Qué resuelve
 
-## Supuestos que requieren confirmación explícita (no bloquean empezar a programar, sí bloquean producción)
+Una familia comparte gastos recurrentes (arriendo, servicios públicos, streaming, seguros) entre varias personas y varios medios de pago. Pendia centraliza eso:
 
-- **Rol por defecto del código de invitación familiar** (ADR-014): se asumió `member`. Si la familia prefiere que el código principal otorgue `admin` a todos, es un parámetro al crear el código, no un cambio de modelo.
-- **Reset de contraseña sin proveedor de email** (ADR-011 #3): reset manual por un admin del grupo. Ver nota en `docs/adr/ADR-011-decisiones-adicionales.md`.
+- **Grupos con roles**: cada usuario puede pertenecer a varios grupos familiares, con rol `owner`, `admin` o `member` en cada uno. Los datos financieros están aislados por grupo.
+- **Invitación por código + QR**: sumar a alguien a un grupo no requiere que ya tenga cuenta creada de antemano.
+- **Obligaciones recurrentes**: se definen una vez (nombre, monto esperado, periodicidad — mensual, bimestral, trimestral, semestral, anual — día de vencimiento, categoría, medio de pago, responsable) y el sistema genera automáticamente los períodos de pago correspondientes.
+- **Registro y anulación de pagos**: cualquier período pendiente se puede marcar como pagado (con su propia moneda, bloqueada a la de la obligación) y revertir si fue un error.
+- **Categorías y medios de pago**: categorías del sistema + personalizadas por grupo, medios de pago con los tipos usados en Colombia (efectivo, cuenta bancaria, tarjeta débito/crédito, Nequi/Daviplata, Bre-B, PSE, otro).
+- **Auditoría**: acciones sensibles (reseteo de contraseña, cambios de rol, transferencia de ownership) quedan registradas.
 
-## Orden de implementación (capas, según sección 26 del brief original)
+## Stack
+
+| | |
+|---|---|
+| **Backend** | Python 3.10+, FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL 16, Argon2id (hash de contraseñas), PyJWT |
+| **Frontend** | Next.js 14 (App Router, export estático), React 18, TypeScript, Tailwind CSS |
+| **Testing** | pytest (257 tests, backend) · Vitest + Testing Library + MSW (118 tests, frontend) |
+| **Infra local** | Docker Compose (PostgreSQL) |
+
+## Arquitectura
+
+Monorepo con dos aplicaciones independientes que solo se comunican por HTTP:
 
 ```
-1. DB: modelos SQLAlchemy desde schema.sql + primera migración Alembic
-2. Backend/Auth: core/security.py, auth/ (register, login, refresh, logout)
-3. API: groups → categories/payment_methods → obligations → periods → payments → dashboard → audit
-4. Frontend: auth-context + login/register → layout con guard → obligations CRUD → payments → dashboard
-5. Testing: se escribe junto con cada capa (TDD por endpoint), no al final
-6. Docker: docker-compose.yml ya listo, validar con `docker compose up`
-7. CI/CD: ci.yml ya listo, activar branch protection en GitHub tras el primer push
-8. Deploy: conectar repo a Cloudflare Pages y Render (dashboards de cada plataforma), configurar env vars de producción
+family-project/
+├── backend/    → API REST (FastAPI), toda la lógica de negocio y persistencia
+├── frontend/   → SPA estática (Next.js export), consume la API vía fetch
+└── docs/adr/   → decisiones de arquitectura documentadas (15 ADR)
 ```
 
-Cada paso de este orden es, en términos de la skill de planeación usada, un
-**ticket ejecutable**: sus bloqueadores son estrictamente los pasos
-anteriores de esta lista, y cada uno cierra con su propio ciclo TDD +
-code review antes de pasar al siguiente.
+- **Auth cross-origin sin sesión de servidor**: access token JWT de vida corta (15 min, en memoria del cliente, nunca en `localStorage`) + refresh token opaco de larga duración en cookie `httpOnly`, con rotación en cada uso. Pensado para que frontend y backend vivan en dominios distintos (Cloudflare Pages / Render) sin depender de cookies same-site.
+- **Autorización por membresía**: el rol (`owner` / `admin` / `member`) vive en la relación usuario-grupo, no en el usuario — la misma persona puede ser admin en un grupo y member en otro. Todo query de negocio filtra por grupo.
+- **Frontend sin servidor propio**: `output: 'export'` de Next.js — build 100% estático, toda la lógica vive en la API. El frontend nunca hace SSR ni tiene acceso directo a la base de datos.
+- **Base de datos**: PostgreSQL con migraciones versionadas en Alembic; ningún cambio de esquema se aplica a mano.
+
+El razonamiento detrás de cada una de estas decisiones (y las alternativas descartadas) está en [`docs/adr/`](docs/adr/).
+
+## Cómo correrlo localmente
+
+Requisitos: Docker, Python 3.10+, Node.js 20+.
+
+**1. Base de datos**
+
+```bash
+docker compose up -d postgres
+```
+
+**2. Backend**
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cp ../backend.env.example .env   # ajustar JWT_SECRET si es necesario
+
+alembic upgrade head
+python scripts/seed.py           # categorías del sistema, opcional
+
+uvicorn app.main:app --reload --port 8000
+```
+
+La API queda en `http://localhost:8000/api/v1`, docs interactivas en `http://localhost:8000/docs`.
+
+**3. Frontend**
+
+```bash
+cd frontend
+cp ../frontend.env.example .env  # NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+npm install
+npm run dev
+```
+
+La app queda en `http://localhost:3000`.
+
+**4. Tests**
+
+```bash
+# Backend (requiere Postgres arriba)
+cd backend && pytest tests/ -v
+
+# Frontend
+cd frontend && npm test
+```
 
 ## Licencia
 
-Código propietario — todos los derechos reservados. Este repositorio es
-público solo como referencia/portafolio; no se otorga ningún permiso de
-uso, copia, modificación ni distribución. Ver [`LICENSE`](LICENSE).
+Código propietario — todos los derechos reservados. Este repositorio es público solo como referencia/portafolio; no se otorga ningún permiso de uso, copia, modificación ni distribución. Ver [`LICENSE`](LICENSE).
