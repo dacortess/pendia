@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# Python virtualenv / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment files (the .env.example templates are meant to stay tracked)
+.env
+.env.*
+!.env.example
+!*.env.example
+
+# Claude Code local settings (per-machine, not shared)
+.claude/settings.local.json
+
+# Editor / OS
+.DS_Store
