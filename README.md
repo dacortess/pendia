@@ -42,3 +42,9 @@ Cada paso de este orden es, en términos de la skill de planeación usada, un
 **ticket ejecutable**: sus bloqueadores son estrictamente los pasos
 anteriores de esta lista, y cada uno cierra con su propio ciclo TDD +
 code review antes de pasar al siguiente.
+
+## Licencia
+
+Código propietario — todos los derechos reservados. Este repositorio es
+público solo como referencia/portafolio; no se otorga ningún permiso de
+uso, copia, modificación ni distribución. Ver [`LICENSE`](LICENSE).

@@ -2,6 +2,7 @@
 name = "family-project-backend"
 version = "0.1.0"
 description = "Gestor Familiar de Pagos y Facturas — backend FastAPI"
+license = { text = "Proprietary - All Rights Reserved. See LICENSE." }
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
